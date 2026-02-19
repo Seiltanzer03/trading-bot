@@ -87,10 +87,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(
             "👋 Привет!\n\n"
             "Этот бот доступен только для участников закрытого клуба.\n\n"
-            "Получи полную институциональную стратегию + доступ к боту:",
-            reply_markup=InlineKeyboardMarkup([[
-                InlineKeyboardButton("💳 Купить стратегию", url="https://t.me/tribute/app?startapp=sOg4")
-            ]])
+            "https://t.me/tribute/app?startapp=sOg4"
         )
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -98,10 +95,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await has_access(context.bot, user.id):
         await update.message.reply_text(
             "⛔ У тебя нет доступа к боту.\n\n"
-            "Приобрети стратегию, чтобы получить доступ:",
-            reply_markup=InlineKeyboardMarkup([[
-                InlineKeyboardButton("💳 Купить стратегию", url="https://t.me/tribute/app?startapp=sOg4")
-            ]])
+            "https://t.me/tribute/app?startapp=sOg4"
         )
         return
     user_text = update.message.text
