@@ -1,7 +1,7 @@
 import os
 import logging
 from fastapi import FastAPI, Request
-from telegram import Update
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
 import httpx
 import uvicorn
@@ -85,14 +85,24 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
     else:
         await update.message.reply_text(
-            "👋 Привет!\n\nБот только для участников закрытого канала.\n\n"
-            "Приобрети стратегию: 👉 @Funambul"
+            "👋 Привет!\n\n"
+            "Этот бот доступен только для участников закрытого клуба.\n\n"
+            "Получи полную институциональную стратегию + доступ к боту:",
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton("💳 Купить стратегию", url="https://t.me/tribute/app?startapp=sOg4")
+            ]])
         )
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     if not await has_access(context.bot, user.id):
-        await update.message.reply_text("⛔ Нет доступа. Приобрети стратегию у @Funambul.")
+        await update.message.reply_text(
+            "⛔ У тебя нет доступа к боту.\n\n"
+            "Приобрети стратегию, чтобы получить доступ:",
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton("💳 Купить стратегию", url="https://t.me/tribute/app?startapp=sOg4")
+            ]])
+        )
         return
     user_text = update.message.text
     if not user_text:
@@ -136,21 +146,21 @@ async def status_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 # ─── FASTAPI + WEBHOOK ─────────────────────────────────────────────────────────
-app_fastapi = FastAPI()
+app = FastAPI()
 application = None
 
-@app_fastapi.get("/")
+@app.get("/")
 async def root():
     return {"status": "ok"}
 
-@app_fastapi.post("/webhook")
+@app.post("/webhook")
 async def webhook(request: Request):
     data = await request.json()
     update = Update.de_json(data, application.bot)
     await application.process_update(update)
     return {"ok": True}
 
-@app_fastapi.on_event("startup")
+@app.on_event("startup")
 async def startup():
     global application
     application = ApplicationBuilder().token(BOT_TOKEN).updater(None).build()
@@ -164,7 +174,7 @@ async def startup():
     await application.bot.set_webhook(url=f"{WEBHOOK_URL}/webhook")
     logger.info(f"Webhook: {WEBHOOK_URL}/webhook")
 
-@app_fastapi.on_event("shutdown")
+@app.on_event("shutdown")
 async def shutdown():
     await application.stop()
     await application.shutdown()
