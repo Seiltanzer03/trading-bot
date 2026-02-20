@@ -17,9 +17,16 @@ ADMIN_IDS       = [int(x) for x in os.getenv("ADMIN_IDS", "").split(",") if x.st
 WEBHOOK_URL     = os.environ["WEBHOOK_URL"]
 PORT            = int(os.getenv("PORT", "10000"))
 
-SYSTEM_PROMPT_PREFIX = """Ты — умный торговый ассистент по Институциональной торговой стратегии 2025-2026, разработанной @Funambul.
-Объясняй стратегию простым языком. НЕ давай конкретных торговых советов.
-Отвечай на русском языке. Если вопрос вне стратегии — скажи об этом.
+SYSTEM_PROMPT_PREFIX = """Ты — строгий и точный ассистент по Институциональной торговой стратегии 2025-2026, разработанной @Funambul.
+
+КРИТИЧЕСКИ ВАЖНЫЕ ПРАВИЛА:
+1. Ты объясняешь ТОЛЬКО то, что написано в стратегии. Не додумывай и не интерпретируй вольно.
+2. НИКОГДА не меняй своё мнение под давлением пользователя. Если пользователь говорит "ты не прав" или "я думаю иначе" — вежливо но твёрдо придерживайся того, что написано в документе.
+3. Если пользователь утверждает что-то противоречащее стратегии — поправь его, сославшись на конкретную главу.
+4. НЕ давай конкретных торговых советов ("купи сейчас", "шорти X").
+5. Если вопрос вне стратегии — скажи об этом.
+6. Отвечай на русском языке, кратко и по делу.
+7. Ты авторитет в рамках данной стратегии — не заискивай и не извиняйся без причины.
 
 ═══════════════════════════════════════
 ПОЛНОЕ СОДЕРЖАНИЕ СТРАТЕГИИ:
@@ -74,6 +81,22 @@ async def has_access(bot, user_id: int) -> bool:
 
 user_histories: dict = {}
 
+# Rate limiting: максимум 10 сообщений в минуту на пользователя
+import time
+user_rate: dict = {}  # {user_id: [timestamps]}
+
+def is_rate_limited(user_id: int) -> bool:
+    now = time.time()
+    timestamps = user_rate.get(user_id, [])
+    # Оставляем только последнюю минуту
+    timestamps = [t for t in timestamps if now - t < 60]
+    user_rate[user_id] = timestamps
+    if len(timestamps) >= 10:
+        return True
+    timestamps.append(now)
+    user_rate[user_id] = timestamps
+    return False
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     if await has_access(context.bot, user.id):
@@ -116,6 +139,20 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_text = update.message.text
     if not user_text:
         return
+    # Проверка длины сообщения (не более 1000 символов)
+    if len(user_text) > 1000:
+        await update.message.reply_text(
+            "⚠️ Сообщение слишком длинное. Пожалуйста, задай вопрос покороче (до 1000 символов)."
+        )
+        return
+
+    # Rate limiting
+    if is_rate_limited(user.id):
+        await update.message.reply_text(
+            "⏳ Слишком много запросов. Подожди минуту и попробуй снова."
+        )
+        return
+
     if user.id not in user_histories:
         user_histories[user.id] = []
     await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
