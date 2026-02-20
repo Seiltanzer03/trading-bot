@@ -85,17 +85,32 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
     else:
         await update.message.reply_text(
-            "👋 Привет!\n\n"
-            "Этот бот доступен только для участников закрытого клуба.\n\n"
-            "https://t.me/tribute/app?startapp=sOg4"
+            "🔒 Доступ закрыт\n\n"
+            "Этот бот — часть <b>Seiltanzer Club Strategy</b>\n\n"
+            "📊 16 институциональных алгоритмов\n"
+            "📈 Индексы · Металлы · Форекс\n"
+            "📡 Ежедневная аналитика и разбор сетапов\n\n"
+            "Приобрети стратегию, чтобы получить доступ:",
+            parse_mode="HTML",
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton("🚀 Получить доступ", url="https://t.me/tribute/app?startapp=sOg4")
+            ]])
         )
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     if not await has_access(context.bot, user.id):
         await update.message.reply_text(
-            "⛔ У тебя нет доступа к боту.\n\n"
-            "https://t.me/tribute/app?startapp=sOg4"
+            "🔒 Доступ закрыт\n\n"
+            "Этот бот — часть <b>Seiltanzer Club Strategy</b>\n\n"
+            "📊 16 институциональных алгоритмов\n"
+            "📈 Индексы · Металлы · Форекс\n"
+            "📡 Ежедневная аналитика и разбор сетапов\n\n"
+            "Приобрети стратегию, чтобы получить доступ:",
+            parse_mode="HTML",
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton("🚀 Получить доступ", url="https://t.me/tribute/app?startapp=sOg4")
+            ]])
         )
         return
     user_text = update.message.text
