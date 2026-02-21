@@ -7,7 +7,7 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ContextTypes
 import httpx
 import uvicorn
-from image_map import find_images_for_query
+from image_map import find_images
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -302,10 +302,14 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 )
 
 
-async def send_relevant_images(update: Update, user_text: str):
+async def send_relevant_images(update: Update, combined_text: str):
     """Отправляет уместные изображения из стратегии если они есть."""
-    images = find_images_for_query(user_text)
+    images = find_images(combined_text)
+    sent = set()
     for img_path, caption in images:
+        if img_path in sent:
+            continue
+        sent.add(img_path)
         if os.path.exists(img_path):
             try:
                 with open(img_path, "rb") as f:
@@ -358,8 +362,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         await update.message.reply_text(reply)
 
-        # Отправляем релевантное изображение если есть
-        await send_relevant_images(update, user_text)
+        # Ищем изображения по тексту ответа ИИ + вопросу пользователя
+        combined = user_text + " " + reply
+        await send_relevant_images(update, combined)
 
     except Exception as e:
         logger.error(f"OpenRouter error: {e}")
