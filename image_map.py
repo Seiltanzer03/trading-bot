@@ -14,12 +14,12 @@ import re
 IMAGE_RULES = [
     (
         r"сетап\s*(?:№\s*)?16|setup\s*(?:№\s*)?16|usdcad|usd\s*cad|канадский\s*доллар",
-        ["images/setup16.png"],
+        ["images/setup15.png"],
         "Сетап №16: USDCAD — 8ч блок + 4ч подтверждение"
     ),
     (
         r"сетап\s*(?:№\s*)?15|setup\s*(?:№\s*)?15|eurusd\s*шорт|eurusd\s*short|евро\s*шорт",
-        ["images/setup15.png"],
+        ["images/image33.png"],
         "Сетап №15: EURUSD — дневной FVG + DXY 4ч (ШОРТ)"
     ),
     (
@@ -29,7 +29,7 @@ IMAGE_RULES = [
     ),
     (
         r"сетап\s*(?:№\s*)?13|setup\s*(?:№\s*)?13|xag\b|серебро|silver|xagusd",
-        ["images/setup13.png"],
+        ["images/image31.png"],
         "Сетап №13: XAG — дневной FVG + AMD 1ч + Fib 0.5"
     ),
     (
@@ -49,7 +49,7 @@ IMAGE_RULES = [
     ),
     (
         r"сетап\s*(?:№\s*)?9\b|setup\s*(?:№\s*)?9\b|uk100|ftse",
-        ["images/setup9.png"],
+        ["images/setup9.png", "images/image26.png"],
         "Сетап №9: UK100 — 12ч FVG + 2ч bFVGc"
     ),
     (
@@ -59,7 +59,7 @@ IMAGE_RULES = [
     ),
     (
         r"сетап\s*(?:№\s*)?7\b|setup\s*(?:№\s*)?7\b|ger40.*sweep|dax.*sweep|dv1x",
-        ["images/setup7.png"],
+        ["images/setup7.png", "images/image13.png"],
         "Сетап №7: GER40 — 12ч FVG sweep + 1ч FVG"
     ),
     (
@@ -79,7 +79,7 @@ IMAGE_RULES = [
     ),
     (
         r"сетап\s*(?:№\s*)?3\b|setup\s*(?:№\s*)?3\b|bfvgc|build\s*fvg\s*candle|12h\s*fvg.*bfvg|12ч.*bfvgc",
-        ["images/setup3_a.png", "images/setup3_b.png"],
+        ["images/setup3_a.png", "images/setup3_b.png", "images/setup3_с.png"],
         "Сетап №3: NAS100 — 12ч FVG + 4ч bFVGc"
     ),
     (
@@ -89,7 +89,7 @@ IMAGE_RULES = [
     ),
     (
         r"сетап\s*(?:№\s*)?1\b|setup\s*(?:№\s*)?1\b|amd.*8h\s*fvg|8h\s*fvg.*amd|nas100.*amd.*возврат",
-        ["images/setup1_a.png", "images/setup1_b.png"],
+        ["images/setup1_a.png"],
         "Сетап №1: NAS100 — AMD + возврат цены 1ч + тест FVG 8ч"
     ),
     # ── РИСК И ТЕОРИЯ ──
@@ -129,7 +129,7 @@ IMAGE_RULES = [
 def find_images(text: str) -> list:
     """
     Ищет изображения по тексту.
-    Возвращает список (путь, подпись), максимум 2 изображения.
+    Возвращает список (путь, подпись), максимум 3 изображения.
     """
     text_lower = text.lower()
     results = []
@@ -138,10 +138,10 @@ def find_images(text: str) -> list:
     for pattern, image_files, caption in IMAGE_RULES:
         if re.search(pattern, text_lower):
             if caption not in seen:
-                for img_path in image_files[:2]:
+                for img_path in image_files[:3]:
                     results.append((img_path, caption))
                 seen.add(caption)
-            if len(results) >= 2:
+            if len(results) >= 3:
                 break
 
-    return results[:2]
+    return results[:3]
