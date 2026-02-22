@@ -10,13 +10,17 @@ from calculator import full_calculate, format_result, SETUP_NAMES, ATR_LABELS
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-BOT_TOKEN      = os.environ["BOT_TOKEN"]
-OPENROUTER_KEY = os.environ["OPENROUTER_API_KEY"]
-CHANNEL_ID     = os.environ["CHANNEL_ID"]
-MODEL          = os.getenv("MODEL", "anthropic/claude-3.5-haiku")
-ADMIN_IDS      = [int(x) for x in os.getenv("ADMIN_IDS", "").split(",") if x.strip()]
-WEBHOOK_URL    = os.environ["WEBHOOK_URL"]
-PORT           = int(os.getenv("PORT", "10000"))
+BOT_TOKEN         = os.environ["BOT_TOKEN"]
+OPENROUTER_KEY    = os.environ["OPENROUTER_API_KEY"]
+CHANNEL_ID        = os.environ["CHANNEL_ID"]         # платный канал
+PUBLIC_CHANNEL_ID = os.environ["PUBLIC_CHANNEL_ID"]  # публичный канал (подписка для файла)
+MODEL             = os.getenv("MODEL", "anthropic/claude-3.5-haiku")
+ADMIN_IDS         = [int(x) for x in os.getenv("ADMIN_IDS", "").split(",") if x.strip()]
+WEBHOOK_URL       = os.environ["WEBHOOK_URL"]
+PORT              = int(os.getenv("PORT", "10000"))
+
+# Пользователи которым уже показали приветствие — не спамим повторно
+welcomed_users: set = set()
 
 CALC_HELP = """
 КАЛЬКУЛЯТОР РИСКА — ЛОГИКА И КОЭФФИЦИЕНТЫ:
@@ -112,11 +116,21 @@ async def ask_openrouter(user_message: str, history: list) -> str:
 # ─── ДОСТУП ────────────────────────────────────────────────────────────────────
 
 async def has_access(bot, user_id: int) -> bool:
+    """Проверка доступа к платному каналу."""
     try:
         member = await bot.get_chat_member(chat_id=CHANNEL_ID, user_id=user_id)
         return member.status in ["member", "administrator", "creator"]
     except Exception as e:
-        logger.warning(f"Ошибка проверки {user_id}: {e}")
+        logger.warning(f"Ошибка проверки платного {user_id}: {e}")
+        return False
+
+async def has_public_subscription(bot, user_id: int) -> bool:
+    """Проверка подписки на публичный канал (для получения Excel-файла)."""
+    try:
+        member = await bot.get_chat_member(chat_id=PUBLIC_CHANNEL_ID, user_id=user_id)
+        return member.status in ["member", "administrator", "creator"]
+    except Exception as e:
+        logger.warning(f"Ошибка проверки публичного {user_id}: {e}")
         return False
 
 user_histories: dict = {}
@@ -179,16 +193,45 @@ def kb_cf():
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
-    if await has_access(context.bot, user.id):
+    is_member = await has_access(context.bot, user.id)
+    first_time = user.id not in welcomed_users
+
+    if is_member:
+        # Стандартное приветствие
         await update.message.reply_text(
             f"Привет, {user.first_name}! 👋\n\n"
             "Я эксперт по Институциональной торговой стратегии @Funambul.\n\n"
             "Задавай вопросы по стратегии — объясню любой сетап, помогу с входом, разберу ситуацию на рынке.\n\n"
-            "📐 /calc — полный калькулятор риска (как в Excel)\n"
+            "📎 /calculator — скачать Excel-файл с продвинутым риск-менеджментом\n"
+            "📐 /calc — калькулятор прямо в боте\n"
             "🔄 /clear — очистить историю"
         )
     else:
-        await update.message.reply_text(NO_ACCESS_MSG, parse_mode="HTML", reply_markup=NO_ACCESS_KB)
+        # Для новых пользователей — приветствие с подарком (только один раз)
+        if first_time:
+            welcomed_users.add(user.id)
+            await update.message.reply_text(
+                f"Привет, {user.first_name}! 👋\n\n"
+                "🎁 *Держи подарок — Excel-файл с продвинутым риск-менеджментом*\n\n"
+                "Внутри формула которая учитывает всё одновременно:\n"
+                "— положение твоего счёта\n"
+                "— реальный винрейт по сетапу\n"
+                "— ментальное состояние\n"
+                "— динамику последних сделок\n\n"
+                "Чтобы получить файл — *подпишись на канал* и нажми /calculator\n\n"
+                "Это бесплатно. Просто подпишись 👇",
+                parse_mode="Markdown",
+                reply_markup=InlineKeyboardMarkup([[
+                    InlineKeyboardButton("📢 Подписаться на канал", url="https://t.me/seiltanzer_fx")
+                ], [
+                    InlineKeyboardButton("✅ Я подписался → получить файл", callback_data="get_calculator")
+                ]])
+            )
+        else:
+            # Повторный /start без подписки — короткое напоминание
+            await update.message.reply_text(
+                NO_ACCESS_MSG, parse_mode="HTML", reply_markup=NO_ACCESS_KB
+            )
 
 
 async def calc_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -336,6 +379,32 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode="Markdown"
         )
 
+    elif data == "get_calculator":
+        # Проверяем подписку и отправляем файл
+        if not await has_public_subscription(query.bot, uid):
+            await query.answer("Сначала подпишись на канал!", show_alert=True)
+            return
+        calc_path = "calc_risk.xlsx"
+        if not os.path.exists(calc_path):
+            await query.message.reply_text("⚠️ Файл не найден. Обратись к администратору.")
+            return
+        await query.answer()
+        with open(calc_path, "rb") as f:
+            await query.message.reply_document(
+                document=f,
+                filename="Seiltanzer_Risk_Management.xlsx",
+                caption=(
+                    "📊 *Excel-файл с продвинутым риск-менеджментом*\n\n"
+                    "Вводи свои данные — получай точный размер позиции "
+                    "с учётом баланса, просадки, ATR и ментального состояния.\n\n"
+                    "Команда /calc — тот же расчёт прямо в боте."
+                ),
+                parse_mode="Markdown"
+            )
+        import asyncio
+        await asyncio.sleep(1)
+        await query.message.reply_text(PROMO_TEXT, parse_mode="Markdown", reply_markup=PROMO_KB)
+
 
 async def send_relevant_images(update: Update, combined_text: str):
     images = find_images(combined_text)
@@ -362,6 +431,12 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not user_text: return
 
     if await handle_calc_session(update, context):
+        return
+
+    # Триггер на запрос калькулятора / файла
+    text_lower = user_text.lower()
+    if any(kw in text_lower for kw in CALCULATOR_KEYWORDS):
+        await send_calculator(update, context)
         return
 
     if len(user_text) > 1000:
@@ -392,6 +467,67 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         logger.error(f"OpenRouter error: {e}")
         await update.message.reply_text("⚠️ Ошибка AI. Попробуй снова.")
+
+
+PROMO_TEXT = (
+    "📊 *Это лишь часть системы.*\n\n"
+    "В полной стратегии @Funambul:\n\n"
+    "📐 *16 институциональных алгоритмов* — индексы, металлы, форекс\n"
+    "🧠 *Логика входов* через FVG, ликвидность, AMD и корреляции\n"
+    "⚙️ *Риск-менеджмент* адаптированный под проп-фирмы и свой капитал\n"
+    "🤖 *AI-бот 24/7* — отвечает на любые вопросы по стратегии\n"
+    "📡 *Закрытый канал* с разборами сделок в реальном времени\n\n"
+    "👇 Узнать подробнее:"
+)
+
+PROMO_KB = InlineKeyboardMarkup([[
+    InlineKeyboardButton("🚀 Получить полную стратегию", url="https://t.me/tribute/app?startapp=sOg4")
+]])
+
+CALCULATOR_KEYWORDS = [
+    "калькулятор", "excel", "таблиц", "xlsx", "скачать файл",
+    "дай файл", "отправь файл", "хочу файл", "получить файл",
+    "лид магнит", "бесплатно", "подарок", "скачать калькулятор"
+]
+
+async def send_calculator(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Отправляет Excel-файл с риск-менеджментом. Требует подписку на публичный канал."""
+    uid = update.effective_user.id
+    if not await has_public_subscription(context.bot, uid):
+        await update.message.reply_text(
+            "📢 Чтобы получить *Excel-файл с продвинутым риск-менеджментом* — подпишись на канал:",
+            parse_mode="Markdown",
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton("📢 Подписаться", url="https://t.me/seiltanzer_fx")
+            ], [
+                InlineKeyboardButton("✅ Я подписался → получить файл", callback_data="get_calculator")
+            ]])
+        )
+        return
+
+    calc_path = "calc_risk.xlsx"
+    if not os.path.exists(calc_path):
+        await update.message.reply_text("⚠️ Файл калькулятора не найден. Обратись к администратору.")
+        return
+
+    await update.message.reply_text("📎 Отправляю калькулятор риска...")
+    with open(calc_path, "rb") as f:
+        await update.message.reply_document(
+            document=f,
+            filename="Seiltanzer_Risk_Calculator.xlsx",
+            caption=(
+                "📊 *Калькулятор риска по стратегии @Funambul*\n\n"
+                "Вводи свои данные и получай точный размер позиции "
+                "с учётом баланса, просадки, ATR и ментального состояния.\n\n"
+                "Инструкция: команда /calc прямо в боте."
+            ),
+            parse_mode="Markdown"
+        )
+
+    # Пауза и реклама
+    import asyncio
+    await asyncio.sleep(1)
+    await update.message.reply_text(PROMO_TEXT, parse_mode="Markdown", reply_markup=PROMO_KB)
 
 
 async def clear(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -436,6 +572,7 @@ async def startup():
     application = ApplicationBuilder().token(BOT_TOKEN).updater(None).build()
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("calc", calc_command))
+    application.add_handler(CommandHandler("calculator", send_calculator))
     application.add_handler(CommandHandler("clear", clear))
     application.add_handler(CommandHandler("reload", reload_strategy))
     application.add_handler(CommandHandler("status", status_cmd))
