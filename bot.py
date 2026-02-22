@@ -583,6 +583,20 @@ async def startup():
     await application.bot.set_webhook(url=f"{WEBHOOK_URL}/webhook")
     logger.info(f"Webhook: {WEBHOOK_URL}/webhook")
 
+    # Keep-alive: пингуем себя каждые 10 минут чтобы не засыпать на Render
+    import asyncio
+    async def keep_alive():
+        while True:
+            await asyncio.sleep(600)  # 10 минут
+            try:
+                async with httpx.AsyncClient(timeout=10) as client:
+                    await client.get(f"{WEBHOOK_URL}/")
+                logger.info("Keep-alive ping sent")
+            except Exception as e:
+                logger.warning(f"Keep-alive failed: {e}")
+
+    asyncio.create_task(keep_alive())
+
 @app.on_event("shutdown")
 async def shutdown():
     await application.stop()
