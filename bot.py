@@ -222,7 +222,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "Это бесплатно. Просто подпишись 👇",
                 parse_mode="Markdown",
                 reply_markup=InlineKeyboardMarkup([[
-                    InlineKeyboardButton("📢 Подписаться на канал", url="https://t.me/seiltanzer_fx")
+                    InlineKeyboardButton("📢 Подписаться на канал", url="https://t.me/SeiltanzerFX")
                 ], [
                     InlineKeyboardButton("✅ Я подписался → получить файл", callback_data="get_calculator")
                 ]])
@@ -498,7 +498,7 @@ async def send_calculator(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "📢 Чтобы получить *Excel-файл с продвинутым риск-менеджментом* — подпишись на канал:",
             parse_mode="Markdown",
             reply_markup=InlineKeyboardMarkup([[
-                InlineKeyboardButton("📢 Подписаться", url="https://t.me/seiltanzer_fx")
+                InlineKeyboardButton("📢 Подписаться", url="https://t.me/SeiltanzerFX)
             ], [
                 InlineKeyboardButton("✅ Я подписался → получить файл", callback_data="get_calculator")
             ]])
