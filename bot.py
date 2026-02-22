@@ -125,12 +125,19 @@ async def has_access(bot, user_id: int) -> bool:
         return False
 
 async def has_public_subscription(bot, user_id: int) -> bool:
-    """Проверка подписки на публичный канал (для получения Excel-файла)."""
+    """Проверка подписки на публичный канал (для получения Excel-файла).
+    ВАЖНО: бот должен быть администратором публичного канала!
+    """
     try:
         member = await bot.get_chat_member(chat_id=PUBLIC_CHANNEL_ID, user_id=user_id)
         return member.status in ["member", "administrator", "creator"]
     except Exception as e:
         logger.warning(f"Ошибка проверки публичного {user_id}: {e}")
+        # Если канал не найден или бот не админ — пропускаем проверку
+        # чтобы не блокировать пользователей из-за ошибки конфигурации
+        if "Chat not found" in str(e) or "bot is not a member" in str(e).lower():
+            logger.error("КРИТИЧНО: Бот не добавлен как администратор в PUBLIC_CHANNEL_ID!")
+            return True  # временно пропускаем чтобы не блокировать пользователей
         return False
 
 user_histories: dict = {}
@@ -202,8 +209,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"Привет, {user.first_name}! 👋\n\n"
             "Я эксперт по Институциональной торговой стратегии @Funambul.\n\n"
             "Задавай вопросы по стратегии — объясню любой сетап, помогу с входом, разберу ситуацию на рынке.\n\n"
-            "📎 /calculator — скачать Excel-файл с продвинутым риск-менеджментом\n"
-            "📐 /calc — калькулятор прямо в боте\n"
+            "📎 /calculator — Excel-файл с продвинутым риск-менеджментом\n"
+            "📐 /calc — калькулятор риска прямо в боте\n"
+            "🛒 /buy — приобрести полную стратегию\n"
             "🔄 /clear — очистить историю"
         )
     else:
@@ -228,9 +236,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 ]])
             )
         else:
-            # Повторный /start без подписки — короткое напоминание
+            # Возвращающийся пользователь — показываем что можно сделать + продажа
             await update.message.reply_text(
-                NO_ACCESS_MSG, parse_mode="HTML", reply_markup=NO_ACCESS_KB
+                RETURNING_TEXT,
+                parse_mode="Markdown",
+                reply_markup=RETURNING_KB
             )
 
 
@@ -384,7 +394,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not await has_public_subscription(query.bot, uid):
             await query.answer("Сначала подпишись на канал!", show_alert=True)
             return
-        calc_path = "calc_risk.xlsx"
+        calc_path = "Seiltanzer_Risk_Management.xlsx"
         if not os.path.exists(calc_path):
             await query.message.reply_text("⚠️ Файл не найден. Обратись к администратору.")
             return
@@ -484,10 +494,28 @@ PROMO_KB = InlineKeyboardMarkup([[
     InlineKeyboardButton("🚀 Получить полную стратегию", url="https://t.me/tribute/app?startapp=sOg4")
 ]])
 
+RETURNING_TEXT = (
+    "👋 С возвращением!\n\n"
+    "Чем могу помочь?\n\n"
+    "📎 /calculator — Excel-файл с риск-менеджментом\n"
+    "📐 /calc — калькулятор риска\n"
+    "📖 Задай любой вопрос по стратегии\n\n"
+    "Если ещё не приобрёл полную стратегию — вот что внутри:\n\n"
+    "📐 16 алгоритмов на индексы, металлы, форекс\n"
+    "🤖 AI-бот 24/7 по стратегии\n"
+    "📡 Закрытый канал с разборами сделок"
+)
+
+RETURNING_KB = InlineKeyboardMarkup([[
+    InlineKeyboardButton("🚀 Купить полную стратегию", url="https://t.me/tribute/app?startapp=sOg4")
+]])
+
 CALCULATOR_KEYWORDS = [
-    "калькулятор", "excel", "таблиц", "xlsx", "скачать файл",
-    "дай файл", "отправь файл", "хочу файл", "получить файл",
-    "лид магнит", "бесплатно", "подарок", "скачать калькулятор"
+    "калькулятор", "excel", "эксель", "таблиц", "xlsx",
+    "скачать файл", "дай файл", "отправь файл", "хочу файл",
+    "получить файл", "бесплатно", "подарок", "скачать калькулятор",
+    "файл", "риск менеджмент", "риск-менеджмент", "файл с риском",
+    "продвинутый риск", "хочу файл", "дайте файл"
 ]
 
 async def send_calculator(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -505,7 +533,7 @@ async def send_calculator(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    calc_path = "calc_risk.xlsx"
+    calc_path = "Seiltanzer_Risk_Management.xlsx"
     if not os.path.exists(calc_path):
         await update.message.reply_text("⚠️ Файл калькулятора не найден. Обратись к администратору.")
         return
@@ -529,6 +557,28 @@ async def send_calculator(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await asyncio.sleep(1)
     await update.message.reply_text(PROMO_TEXT, parse_mode="Markdown", reply_markup=PROMO_KB)
 
+
+async def buy_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Показывает информацию о покупке стратегии."""
+    await update.message.reply_text(
+        "🚀 *Полная стратегия @Funambul*\n\n"
+        "Что входит:\n\n"
+        "📐 *16 институциональных алгоритмов*\n"
+        "Сетапы на NAS100, SP500, US30, GER40, UK100, JPY100, XAU, XAG, EURUSD, USDCAD\n\n"
+        "🧠 *Институциональная логика*\n"
+        "FVG, ликвидность, AMD, корреляции активов — торгуешь как smart money\n\n"
+        "⚙️ *Продвинутый риск-менеджмент*\n"
+        "Динамическая матрица рисков, k-буфер, k-цикл, ATR-фильтр, Recovery-режим\n\n"
+        "🤖 *AI-бот 24/7*\n"
+        "Этот бот отвечает на любые вопросы по стратегии в любое время\n\n"
+        "📡 *Закрытый канал*\n"
+        "Разборы сделок в реальном времени, аналитика, обновления стратегии\n\n"
+        "👇 Оформить доступ:",
+        parse_mode="Markdown",
+        reply_markup=InlineKeyboardMarkup([[
+            InlineKeyboardButton("🚀 Купить стратегию", url="https://t.me/tribute/app?startapp=sOg4")
+        ]])
+    )
 
 async def clear(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_histories[update.effective_user.id] = []
@@ -573,6 +623,7 @@ async def startup():
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("calc", calc_command))
     application.add_handler(CommandHandler("calculator", send_calculator))
+    application.add_handler(CommandHandler("buy", buy_command))
     application.add_handler(CommandHandler("clear", clear))
     application.add_handler(CommandHandler("reload", reload_strategy))
     application.add_handler(CommandHandler("status", status_cmd))
